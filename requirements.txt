@@ -1,0 +1,13 @@
+streamlit
+pandas
+scikit-learn
+wget
+librosa
+soundfile
+plotly
+# https://github.com/librosa/librosa/issues/1763
+matplotlib==3.7
+seaborn
+dtreeviz
+zipfile36
+IPython
