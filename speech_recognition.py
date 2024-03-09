@@ -165,12 +165,14 @@ def main():
   # X_train_imp_features = X_train[:, imp_features[:, 1]]
 
   # Voting classifiers
+  # https://stackoverflow.com/questions/58580273/why-does-logisticregression-take-target-variable-of-type-object-without-any
   log_clf = LogisticRegression(random_state=42)
   svm_clf = SVC(probability= True, random_state = 42)
   dt_clf = DecisionTreeClassifier(max_depth = 10, random_state = 42)
   rf_clf = RandomForestClassifier(n_estimators = 500, random_state = 42)
   classifiers = [('lr', log_clf), ('svc', svm_clf), ('dec_tree', dt_clf), ('rf', rf_clf)]
   voting_clf = VotingClassifier(estimators = classifiers, voting = 'soft')
+
 
   for clf in (log_clf, svm_clf, dt_clf, rf_clf, voting_clf):
     print('------------------------------')
