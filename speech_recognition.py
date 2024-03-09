@@ -31,17 +31,16 @@ def download_data():
     wget.download(url, file_name)
   return file_name
 
-def all_emotions_in_ravdess(ravdess_wav_files, mapping, emt_logic):
+def all_emotions_in_dataset(wav_files, mapping, emt_logic):
   emotions_ = []
   emotions_count = {}
-  for file_name in ravdess_wav_files:
+  for file_name in wav_files:
       emt = mapping[emt_logic(file_name)]
       emotions_.append(emt)
       if(emt in emotions_count.keys()):
          emotions_count[emt] += 1
       else:
          emotions_count[emt] = 1
-  # calm is not available in training data set so can be removed while training
   print(set(emotions_))
   return emotions_count
 
@@ -112,7 +111,8 @@ def main():
   ravdess_mapping = {"01" : "neutral", "02" : "calm", "03" : "happy", "04" : "sad",\
                "05" : "angry", "06" : "fear", "07" : "disgust", "08" : "surprised"}
   ravdess_emt_logic = lambda x: x.split("-")[2]
-  ravdess_emotions_count = all_emotions_in_ravdess(ravdess_wav_files, ravdess_mapping, ravdess_emt_logic)
+  # calm is not available in training data set so can be removed while training
+  ravdess_emotions_count = all_emotions_in_dataset(ravdess_wav_files, ravdess_mapping, ravdess_emt_logic)
   print(ravdess_emotions_count)
   plt.figure(figsize=(10,10))
   plt.title('Ravdess countplot')
@@ -126,14 +126,12 @@ def main():
   tess_mapping = {"neutral": "neutral", "calm": "calm", "happy": "happy", "sad": "sad",\
                "angry": "angry", "fear": "fear", "disgust": "disgust", "surprised": "surprised"}
   tess_emt_logic = lambda x: x.split("/")[-1].split(".")[0].split("_")[-1].lower()
-  tess_emotions_count = all_emotions_in_ravdess(tess_wav_files, tess_mapping, tess_emt_logic)
+  tess_emotions_count = all_emotions_in_dataset(tess_wav_files, tess_mapping, tess_emt_logic)
   print(tess_emotions_count)
   plt.title('Tess countplot')
   plt.figure(figsize=(10,10))
   plt.plot(tess_emotions_count.keys(), tess_emotions_count.values())
   plt.savefig('plots/tess_class_counts.png')
-
-  st.pyplot()
   
   df_features, df_labels = extract_features_and_lables(ravdess_wav_files, ravdess_mapping,\
                                   ravdess_emt_logic, tess_wav_files, tess_mapping, tess_emt_logic)
@@ -154,4 +152,5 @@ def main():
   imp_features = [(idx, score) for (idx ,score) in enumerate(rf_clf.feature_importances_) if score > 0.009]
   print(imp_features)
 
+  st.pyplot()
 main()
