@@ -11,3 +11,4 @@ seaborn
 dtreeviz
 zipfile36
 IPython
+hyperopt
