@@ -18,6 +18,9 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import VotingClassifier, BaggingClassifier, RandomForestClassifier
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
+from sklearn.model_selection import cross_val_score
+
 
 from matplotlib import pyplot as plt
 
@@ -26,7 +29,6 @@ import soundfile
 import IPython.display as ipd
 
 from hyperopt import hp,fmin,tpe,STATUS_OK,Trials
-from sklearn.model_selection import cross_val_score
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -138,59 +140,77 @@ def extract_kaggle_data_features():
 
 def main():
   #download and extract zip file
-  file_name = download_data()
-  extracted_folder = 'Ravdess_Tess'
-  if(not os.path.exists(extracted_folder)):
-    with zipfile.ZipFile(file_name, 'r') as zip_ref:
-      zip_ref.extractall(extracted_folder)
-
-  ravdess_wav_files = glob.glob(f"{extracted_folder}/ravdess/*/*.wav")
-  ravdess_mapping = {"01" : "neutral", "02" : "calm", "03" : "happy", "04" : "sad",\
-               "05" : "angry", "06" : "fear", "07" : "disgust", "08" : "surprised"}
-  ravdess_emt_logic = lambda x: x.split("-")[2]
-  # calm is not available in training data set so can be removed while training
-
-  tess_wav_files = glob.glob(f"{extracted_folder}/Tess/*/*.wav")
-  tess_mapping = {"neutral": "neutral", "calm": "calm", "happy": "happy", "sad": "sad",\
-               "angry": "angry", "fear": "fear", "disgust": "disgust", "surprised": "surprised"}
-  tess_emt_logic = lambda x: x.split("/")[-1].split(".")[0].split("_")[-1].lower()
-
-  # plot_bar_of_each_class_counts(ravdess_wav_files, ravdess_mapping, ravdess_emt_logic, tess_wav_files, tess_mapping, tess_emt_logic)
-  
-  df_features, df_labels = extract_features_and_lables(ravdess_wav_files, ravdess_mapping,\
-                                  ravdess_emt_logic, tess_wav_files, tess_mapping, tess_emt_logic)
-  X = df_features.copy()
-  y = df_labels.copy()
-  X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, stratify=y, random_state = 14)
+  X_train, X_test, y_train, y_test = load_data_and_split()
 
   # Random Forest classifier
   print("---------------------------------")
   st.write("# Random Forest Classifier")
   print("-------------------")
-  maxDepth = 5
+
+  maxDepth = 8
   estimators = 200
   rf_clf = RandomForestClassifier(n_estimators = estimators, max_depth=maxDepth, random_state = 123)
   rf_clf = rf_clf.fit(X_train, y_train)
-  y_pred = rf_clf.predict(X_test)
-  st.write("## Testing Report")
 
-  st.write( accuracy_score(y_test, y_pred))
-  st.dataframe(pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)))
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, rf_clf)
 
-  y_pred_train = rf_clf.predict(X_train)
-  st.write("## Training Report")
-  st.write( accuracy_score(y_train, y_pred_train))
-  st.dataframe(pd.DataFrame(classification_report(y_train, y_pred_train, output_dict=True)))
-  st.write("## Important features")
-  imp_features = np.array([[idx, score] for (idx ,score) in enumerate(rf_clf.feature_importances_) if score > 0.009])
-  st.write(imp_features)
+  # st.write("## Important features")
+  # imp_features = np.array([[idx, score] for (idx ,score) in enumerate(rf_clf.feature_importances_) if score > 0.009])
+  # st.write(imp_features)
+
+  st.write("# Random Forest Classifier using Random Search cv")
+  rf_randomcv = randomized_search_rf(X_train, y_train)
+  st.write('## Best params')
+  st.write(rf_randomcv.best_params_)
+  best_clf = rf_randomcv.best_estimator_
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, best_clf)
 
   kaggle_data_df = extract_kaggle_data_features()
   predict_kaggle_for_classifier(rf_clf, kaggle_data_df, f'rf_max_depth_{maxDepth}_est_{estimators}')
+  predict_kaggle_for_classifier(rf_clf, kaggle_data_df, f'rf_random_search')
 
   # Voting classifiers
   # https://stackoverflow.com/questions/58580273/why-does-logisticregression-take-target-variable-of-type-object-without-any
   # try_different_classifiers_and_save_models(X_train, X_test, y_train, y_test)
+
+
+def load_data_and_split():
+    file_name = download_data()
+    extracted_folder = 'Ravdess_Tess'
+    if(not os.path.exists(extracted_folder)):
+      with zipfile.ZipFile(file_name, 'r') as zip_ref:
+        zip_ref.extractall(extracted_folder)
+
+    ravdess_wav_files = glob.glob(f"{extracted_folder}/ravdess/*/*.wav")
+    ravdess_mapping = {"01" : "neutral", "02" : "calm", "03" : "happy", "04" : "sad",\
+               "05" : "angry", "06" : "fear", "07" : "disgust", "08" : "surprised"}
+    ravdess_emt_logic = lambda x: x.split("-")[2]
+  # calm is not available in training data set so can be removed while training
+
+    tess_wav_files = glob.glob(f"{extracted_folder}/Tess/*/*.wav")
+    tess_mapping = {"neutral": "neutral", "calm": "calm", "happy": "happy", "sad": "sad",\
+               "angry": "angry", "fear": "fear", "disgust": "disgust", "surprised": "surprised"}
+    tess_emt_logic = lambda x: x.split("/")[-1].split(".")[0].split("_")[-1].lower()
+
+  # plot_bar_of_each_class_counts(ravdess_wav_files, ravdess_mapping, ravdess_emt_logic, tess_wav_files, tess_mapping, tess_emt_logic)
+  
+    df_features, df_labels = extract_features_and_lables(ravdess_wav_files, ravdess_mapping,\
+                                  ravdess_emt_logic, tess_wav_files, tess_mapping, tess_emt_logic)
+    X = df_features.copy()
+    y = df_labels.copy()
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, stratify=y, random_state = 14)
+    return X_train,X_test,y_train,y_test
+
+def write_train_and_test_reports(X_train, X_test, y_train, y_test, rf_clf):
+    y_pred = rf_clf.predict(X_test)
+    st.write("## Testing Report")
+    st.write( accuracy_score(y_test, y_pred))
+    st.dataframe(pd.DataFrame(classification_report(y_test, y_pred, output_dict=True)))
+
+    y_pred_train = rf_clf.predict(X_train)
+    st.write("## Training Report")
+    st.write( accuracy_score(y_train, y_pred_train))
+    st.dataframe(pd.DataFrame(classification_report(y_train, y_pred_train, output_dict=True)))
 
 def try_different_classifiers_and_save_models(X_train, X_test, y_train, y_test):
     log_clf = LogisticRegression(random_state=42)
@@ -267,4 +287,68 @@ def hyper_opt_best_model(X_train, y_train):
                 
     return best
 
-main()
+def randomized_search_rf(X_train, y_train):
+  # Number of trees in random forest
+  n_estimators = [int(x) for x in np.linspace(start = 100, stop = 800, num = 10)]
+  # Number of features to consider at every split
+  max_features = ['auto', 'sqrt','log2']
+  # Maximum number of levels in tree
+  max_depth = [int(x) for x in np.linspace(5, 30, 5)]
+  # Minimum number of samples required to split a node
+  min_samples_split = [2, 5, 10,14]
+  # Minimum number of samples required at each leaf node
+  min_samples_leaf = [1, 2, 4,6,8]
+  # Create the random grid
+  random_grid = {'n_estimators': n_estimators,
+                'max_features': max_features,
+                'max_depth': max_depth,
+                'min_samples_split': min_samples_split,
+                'min_samples_leaf': min_samples_leaf,
+                'criterion':['entropy','gini']}
+  print(random_grid)
+
+  rf=RandomForestClassifier()
+  rf_randomcv=RandomizedSearchCV(estimator=rf,param_distributions=random_grid,n_iter=100,cv=3,verbose=2,
+                                random_state=42,n_jobs=5)
+  # fit to randomized rf
+  rf_randomcv.fit(X_train, y_train.to_numpy())
+  rf_randomcv.best_params_
+  print(rf_randomcv.best_params_)
+
+# to make new classifier with the best estimator
+  return rf_randomcv
+
+def grid_search_from_input_from_random_search(rf_randomcv, X_train, y_train):
+  param_grid = {
+    'criterion': [rf_randomcv.best_params_['criterion']],
+    'max_depth': [rf_randomcv.best_params_['max_depth']],
+    'max_features': [rf_randomcv.best_params_['max_features']],
+    'min_samples_leaf': [rf_randomcv.best_params_['min_samples_leaf'], 
+                         rf_randomcv.best_params_['min_samples_leaf']+2, 
+                         rf_randomcv.best_params_['min_samples_leaf'] + 4],
+    'min_samples_split': [rf_randomcv.best_params_['min_samples_split'] - 2,
+                          rf_randomcv.best_params_['min_samples_split'] - 1,
+                          rf_randomcv.best_params_['min_samples_split'], 
+                          rf_randomcv.best_params_['min_samples_split'] +1,
+                          rf_randomcv.best_params_['min_samples_split'] + 2],
+    'n_estimators': [rf_randomcv.best_params_['n_estimators'] + x for x in range(-300, 400, 100)]
+  }
+  rf=RandomForestClassifier()
+  grid_search=GridSearchCV(estimator=rf,param_grid=param_grid,cv=10,n_jobs=-1,verbose=2)
+  grid_search.fit(X_train,y_train)
+  return grid_search
+# main()
+
+from sklearn.ensemble import HistGradientBoostingClassifier
+
+def xgBoost():
+  st.write('# Xg booost')
+  X_train, X_test, y_train, y_test = load_data_and_split()
+  xg_clf = HistGradientBoostingClassifier(random_state = 42)
+  xg_clf.fit(X_train, y_train)
+
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, xg_clf)
+  kaggle_data_df = extract_kaggle_data_features()
+  predict_kaggle_for_classifier(xg_clf, kaggle_data_df, f'xgboost_plain')
+
+xgBoost()
