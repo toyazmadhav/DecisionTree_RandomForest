@@ -162,12 +162,20 @@ def main():
   rf_randomcv = randomized_search_rf(X_train, y_train)
   st.write('## Best params')
   st.write(rf_randomcv.best_params_)
-  best_clf = rf_randomcv.best_estimator_
-  write_train_and_test_reports(X_train, X_test, y_train, y_test, best_clf)
+  best_rf_random_clf = rf_randomcv.best_estimator_
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, best_rf_random_clf)
+
+  st.write("# Random Forest Classifier using Grid Search cv starting from random search cv's output")
+  rf_grid_search = grid_search_from_input_from_random_search(rf_randomcv, X_train, y_train)
+  st.write('## Best params')
+  st.write(rf_grid_search.best_params_)
+  best_rf_grid_clf = rf_grid_search.best_estimator_
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, best_rf_grid_clf)
 
   kaggle_data_df = extract_kaggle_data_features()
   predict_kaggle_for_classifier(rf_clf, kaggle_data_df, f'rf_max_depth_{maxDepth}_est_{estimators}')
-  predict_kaggle_for_classifier(rf_clf, kaggle_data_df, f'rf_random_search')
+  predict_kaggle_for_classifier(best_rf_random_clf, kaggle_data_df, f'rf_random_search')
+  predict_kaggle_for_classifier(best_rf_grid_clf, kaggle_data_df, f'rf_grid_search_starting_from_random_search')
 
   # Voting classifiers
   # https://stackoverflow.com/questions/58580273/why-does-logisticregression-take-target-variable-of-type-object-without-any
@@ -307,11 +315,11 @@ def randomized_search_rf(X_train, y_train):
                 'criterion':['entropy','gini']}
   print(random_grid)
 
-  rf=RandomForestClassifier()
-  rf_randomcv=RandomizedSearchCV(estimator=rf,param_distributions=random_grid,n_iter=100,cv=3,verbose=2,
+  rf=RandomForestClassifier(random_state=42)
+  rf_randomcv=RandomizedSearchCV(estimator=rf,param_distributions=random_grid,n_iter=100,cv=3,verbose=4,
                                 random_state=42,n_jobs=5)
   # fit to randomized rf
-  rf_randomcv.fit(X_train, y_train.to_numpy())
+  rf_randomcv.fit(X_train, y_train.values.ravel())
   rf_randomcv.best_params_
   print(rf_randomcv.best_params_)
 
@@ -333,11 +341,10 @@ def grid_search_from_input_from_random_search(rf_randomcv, X_train, y_train):
                           rf_randomcv.best_params_['min_samples_split'] + 2],
     'n_estimators': [rf_randomcv.best_params_['n_estimators'] + x for x in range(-300, 400, 100)]
   }
-  rf=RandomForestClassifier()
-  grid_search=GridSearchCV(estimator=rf,param_grid=param_grid,cv=10,n_jobs=-1,verbose=2)
-  grid_search.fit(X_train,y_train)
+  rf=RandomForestClassifier(random_state=42)
+  grid_search=GridSearchCV(estimator=rf,param_grid=param_grid,cv=10,n_jobs=-1,verbose=4)
+  grid_search.fit(X_train,y_train.values.ravel())
   return grid_search
-# main()
 
 from sklearn.ensemble import HistGradientBoostingClassifier
 
@@ -351,4 +358,5 @@ def xgBoost():
   kaggle_data_df = extract_kaggle_data_features()
   predict_kaggle_for_classifier(xg_clf, kaggle_data_df, f'xgboost_plain')
 
-xgBoost()
+# xgBoost()
+main()
