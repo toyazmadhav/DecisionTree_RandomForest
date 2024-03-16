@@ -1,5 +1,3 @@
-from email import header
-from tkinter.tix import X_REGION
 import wget
 import pandas as pd
 import streamlit as st
@@ -21,6 +19,7 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
 from sklearn.model_selection import cross_val_score
 
+from utils import *
 
 from matplotlib import pyplot as plt
 
@@ -268,22 +267,22 @@ def predict_kaggle_for_classifier(clf, kaggle_data_df, file_suffix):
 def hyper_opt_best_model(X_train, y_train):
     space = {'criterion': hp.choice('criterion', ['entropy', 'gini']),
           'max_depth': hp.quniform('max_depth', 10, 1200, 10),
-          'max_features': hp.choice('max_features', ['auto', 'sqrt','log2', None]),
+          'max_features': hp.choice('max_features', ['sqrt','log2', None]),
           'min_samples_leaf': hp.uniform('min_samples_leaf', 0, 0.5),
           'min_samples_split' : hp.uniform ('min_samples_split', 0, 1),
           'n_estimators' : hp.choice('n_estimators', [10, 50, 300, 750, 1200,1300,1500])
       }
-    def objective(space):
-      model = RandomForestClassifier(criterion = space['criterion'], max_depth = space['max_depth'],
-                                 max_features = space['max_features'],
-                                 min_samples_leaf = space['min_samples_leaf'],
-                                 min_samples_split = space['min_samples_split'],
-                                 n_estimators = space['n_estimators'], 
-                                 )
+    def objective(params):
+      x = 1
+      int_types = ["max_features", "max_depth", "n_estimators"]
+      params = convert_int_params(int_types, params)
+      float_types = ["min_samples_leaf", "min_samples_split"]
+      # params = convert_float_params(float_types, params)
+      params['random_state'] = 42
+      model = RandomForestClassifier(**params )
     
       accuracy = cross_val_score(model, X_train, y_train, cv = 5).mean()
-
-    # We aim to maximize accuracy, therefore we return it as a negative value
+      # We aim to maximize accuracy, therefore we return it as a negative value
       return {'loss': -accuracy, 'status': STATUS_OK }
   
     trials = Trials()
@@ -358,5 +357,7 @@ def xgBoost():
   kaggle_data_df = extract_kaggle_data_features()
   predict_kaggle_for_classifier(xg_clf, kaggle_data_df, f'xgboost_plain')
 
-# xgBoost()
-main()
+  hyper_opt_best_model(X_train, y_train)
+
+xgBoost()
+# main()
