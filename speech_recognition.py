@@ -264,13 +264,13 @@ def predict_kaggle_for_classifier(clf, kaggle_data_df, file_suffix):
     kaggle_pred_df.to_csv(f'submissions/kaggle_submission_{file_suffix}.csv', index=False)
     print(kaggle_pred)
 
-def hyper_opt_best_model(X_train, y_train):
+def hyper_opt_best_model(X_train, y_train) -> dict:
     space = {'criterion': hp.choice('criterion', ['entropy', 'gini']),
-          'max_depth': hp.quniform('max_depth', 10, 1200, 10),
-          'max_features': hp.choice('max_features', ['sqrt','log2', None]),
-          'min_samples_leaf': hp.uniform('min_samples_leaf', 0, 0.5),
-          'min_samples_split' : hp.uniform ('min_samples_split', 0, 1),
-          'n_estimators' : hp.choice('n_estimators', [10, 50, 300, 750, 1200,1300,1500])
+          'max_depth': hp.quniform('max_depth', 2, 20, 3),
+          'max_features': hp.choice('max_features', ['sqrt','log2']),
+          'min_samples_leaf': hp.uniform('min_samples_leaf', 0.01, 0.4),
+          'min_samples_split' : hp.uniform ('min_samples_split', 0.01, 0.3),
+          'n_estimators' : hp.choice('n_estimators', [100, 200, 300, 400, 500, 600, 800])
       }
     def objective(params):
       x = 1
@@ -357,7 +357,19 @@ def xgBoost():
   kaggle_data_df = extract_kaggle_data_features()
   predict_kaggle_for_classifier(xg_clf, kaggle_data_df, f'xgboost_plain')
 
-  hyper_opt_best_model(X_train, y_train)
+  best_param = hyper_opt_best_model(X_train, y_train)
+  int_types = ["max_features", "max_depth", "n_estimators"]
+  best_param = convert_int_params(int_types, best_param)
+  best_param['criterion'] = 'gini' if  best_param['criterion'] == 1 else 'entropy'
+  best_param['max_features'] = 'log2' if  best_param['max_features'] == 1 else 'sqrt'
+  rf_clf_hyp_tuned = RandomForestClassifier(**best_param)
+  rf_clf_hyp_tuned.fit(X_train, y_train)
+
+  write_train_and_test_reports(X_train, X_test, y_train, y_test, rf_clf_hyp_tuned)
+  kaggle_data_df = extract_kaggle_data_features()
+  predict_kaggle_for_classifier(rf_clf_hyp_tuned, kaggle_data_df, f'randomForest_hyp_opt_tuned')
+
+
 
 xgBoost()
 # main()
